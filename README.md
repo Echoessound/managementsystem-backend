@@ -192,4 +192,3 @@ const transporter = nodemailer.createTransport({
 - 确保 MongoDB 服务已启动
 - 数据库: `hotel_manage_system` 会自动创建
 - 集合: `users`、`hotels` 会自动创建
-- 生产环境建议使用 MongoDB Atlas 云数据库
