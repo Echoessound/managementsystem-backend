@@ -6,6 +6,9 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 require('./config/database'); // 引入 MongoDB 连接
 
 const authRoutes = require('./routes/auth');
@@ -14,10 +17,29 @@ const hotelRoutes = require('./routes/hotel');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// 确保上传目录存在
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+// 配置文件上传中间件
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        // 使用时间戳 + 原始文件名
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
 // 中间件
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // 静态文件服务
 
 // 路由
 app.use('/api/auth', authRoutes);

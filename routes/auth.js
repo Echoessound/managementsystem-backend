@@ -144,6 +144,7 @@ router.post('/register', async (req, res) => {
  * POST /api/auth/login
  * Body: { username, password }
  */
+
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -153,7 +154,7 @@ router.post('/login', async (req, res) => {
 
     try {
         // 查找用户
-        const user = await User.findOne({ username, password });
+        const user = await User.findOne({ username, password });//查找用户
 
         if (!user) {
             return res.json({ code: 401, message: '用户名或密码错误' });
@@ -168,14 +169,14 @@ router.post('/login', async (req, res) => {
         res.json({
             code: 200,
             message: '登录成功',
-            data: {
+            data: {//返回用户信息和token
                 user: {
                     id: user._id,
                     username: user.username,
                     email: user.email,
                     role: user.role
                 },
-                token
+                token//返回token
             }
         });
     } catch (error) {
