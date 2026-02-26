@@ -393,7 +393,7 @@ router.put('/update/:id', auth, upload.fields([
 });
 
 // 删除酒店
-router.delete('/delete/:id', auth, async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const hotel = await Hotel.findById(id);
