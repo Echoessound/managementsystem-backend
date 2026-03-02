@@ -86,6 +86,7 @@ const hotelSchema = new mongoose.Schema({
     description: String,
     price: Number,
     capacity: Number,
+    count: Number, // 房间数量
     bedType: String,
     area: Number,
     images: [String],

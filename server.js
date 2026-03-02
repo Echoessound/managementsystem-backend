@@ -7,6 +7,13 @@ const path = require('path');
 const multer = require('multer');
 
 const app = express();
+
+// 全局请求日志中间件 (放在最前面)
+app.use((req, res, next) => {
+  console.log(`[REQ] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors());
 
 // 配置 multer 用于处理文件上传
@@ -56,6 +63,8 @@ const UserPreference = require('./models/UserPreference');
 // 导入路由
 const authRoutes = require('./routes/auth');
 const hotelRoutes = require('./routes/hotel');
+
+console.log('Loading hotel routes...');
 const reviewRoutes = require('./routes/review');
 const favoriteRoutes = require('./routes/favorite');
 const browsingHistoryRoutes = require('./routes/browsingHistory');
@@ -66,6 +75,7 @@ const aiRoutes = require('./routes/ai');
 // 注册路由
 app.use('/api/auth', authRoutes);
 app.use('/api/hotel', hotelRoutes);
+console.log('Hotel routes mounted at /api/hotel');
 app.use('/api/review', reviewRoutes);
 app.use('/api/favorite', favoriteRoutes);
 app.use('/api/browsingHistory', browsingHistoryRoutes);

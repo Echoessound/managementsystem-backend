@@ -35,7 +35,7 @@ const auth = (req, res, next) => {
 // 获取酒店列表
 router.get('/list', async (req, res) => {
   try {
-    const { page = 1, pageSize = 10, city, status, ownerId, keyword, minPrice, maxPrice, rating, amenities } = req.query;
+    const { page = 1, pageSize = 10, city, status, ownerId, keyword, minPrice, maxPrice, rating, amenities, publishStatus } = req.query;
     
     const query = {};
     
@@ -46,12 +46,31 @@ router.get('/list', async (req, res) => {
     
     // 状态筛选
     if (status) {
-      query.status = status;
-    } else if (!ownerId) {
+      // 支持多状态查询，用逗号分隔，如 "pending,rejected"
+      if (status.includes(',')) {
+        query.status = { $in: status.split(',') };
+      } else {
+        query.status = status;
+      }
+    } else if (!ownerId && !status && !publishStatus) {
       // 默认只返回已发布的酒店（商户查看自己酒店时不受此限制）
       query.status = 'published';
     }
     // 如果有 ownerId，则返回该商户的所有酒店（包括待审核的）
+    
+    // 发布状态筛选 - 用户端只显示已发布的酒店
+    if (!ownerId && !publishStatus) {
+      query.publishStatus = 'published';
+    }
+    
+    // 允许指定 publishStatus 查询（如管理员查询草稿酒店）
+    if (publishStatus) {
+      if (publishStatus.includes(',')) {
+        query.publishStatus = { $in: publishStatus.split(',') };
+      } else {
+        query.publishStatus = publishStatus;
+      }
+    }
     
     // 商家ID筛选
     if (ownerId) {
@@ -128,6 +147,11 @@ router.get('/detail/:id', async (req, res) => {
       return res.json({ code: 404, message: '酒店不存在' });
     }
     
+    // 检查酒店是否已发布，未发布的酒店不允许查看详情
+    if (hotel.publishStatus !== 'published') {
+      return res.json({ code: 403, message: '该酒店未发布' });
+    }
+    
     res.json({ code: 200, data: hotel });
   } catch (error) {
     console.error('获取酒店详情失败:', error);
@@ -175,6 +199,7 @@ router.put('/:id/review', auth, async (req, res) => {
 
 // 获取酒店详情 - 兼容旧版前端路径 /hotel/:id
 router.get('/:id', async (req, res) => {
+  console.log('Caught by GET /:id:', req.params.id);
   try {
     const { id } = req.params;
     
@@ -182,7 +207,12 @@ router.get('/:id', async (req, res) => {
     if (id === 'list' || id === 'search' || id === 'city' || id === 'detail') {
       return res.json({ code: 404, message: '路由不存在' });
     }
-    
+
+    // 忽略特定动作路由，防止被 /:id 匹配
+    if (id === 'resubmit' || id === 'submit' || id === 'publish' || id === 'review') {
+      return res.json({ code: 404, message: '路由不存在' });
+    }
+
     // 验证ID格式
     if (!id || id === 'undefined' || id === 'null') {
       return res.json({ code: 400, message: '无效的酒店ID' });
@@ -276,7 +306,8 @@ router.post('/create', upload.fields([
 });
 
 // 发布/下架酒店
-router.post('/publish/:id', auth, async (req, res) => {
+console.log('Registering route: POST /:id/publish');
+router.post('/:id/publish', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { publish } = req.body;
@@ -328,11 +359,19 @@ router.put('/update/:id', auth, upload.fields([
 ]), async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('更新酒店请求 - ID:', id);
+    console.log('Token 用户ID:', req.userId);
+    console.log('请求体:', req.body);
+    
     const hotel = await Hotel.findById(id);
     
     if (!hotel) {
       return res.json({ code: 404, message: '酒店不存在' });
     }
+    
+    console.log('酒店 ownerId:', hotel.ownerId);
+    console.log('酒店 ownerId 类型:', typeof hotel.ownerId);
+    console.log('req.userId 类型:', typeof req.userId);
     
     // 检查权限
     if (hotel.ownerId.toString() !== req.userId) {
@@ -373,7 +412,18 @@ router.put('/update/:id', auth, upload.fields([
     // 解析 roomTypes 字符串
     if (updateData.roomTypes && typeof updateData.roomTypes === 'string') {
       try {
+        console.log('更新酒店 - 接收到的 roomTypes 字符串:', updateData.roomTypes);
         updateData.roomTypes = JSON.parse(updateData.roomTypes);
+        
+        // 确保 price 和 count 是数字类型
+        updateData.roomTypes.forEach(rt => {
+            if (rt.price) rt.price = Number(rt.price);
+            if (rt.count) rt.count = Number(rt.count);
+            if (rt.capacity) rt.capacity = Number(rt.capacity);
+            if (rt.area) rt.area = Number(rt.area);
+        });
+        
+        console.log('更新酒店 - 解析后的 roomTypes 对象:', updateData.roomTypes);
       } catch (e) {
         console.error('解析 roomTypes 失败:', e);
       }
@@ -417,7 +467,8 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // 提交审核
-router.post('/submit/:id', auth, async (req, res) => {
+console.log('Registering route: POST /:id/submit');
+router.post('/:id/submit', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const hotel = await Hotel.findById(id);
@@ -440,8 +491,14 @@ router.post('/submit/:id', auth, async (req, res) => {
   }
 });
 
+console.log('--- Hotel.js loaded ---');
+console.log('Loading Hotel module...');
+
 // 再次审核（重新提交）
-router.post('/resubmit/:id', auth, async (req, res) => {
+console.log('Registering route: POST /:id/resubmit');
+router.post('/:id/resubmit', auth, async (req, res) => {
+  console.log('HIT /:id/resubmit route with id:', req.params.id);
+  console.log('收到重新提交审核请求:', req.params.id);
   try {
     const { id } = req.params;
     const hotel = await Hotel.findById(id);
